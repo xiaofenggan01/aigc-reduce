@@ -1,6 +1,32 @@
+---
+name: aigc-reduce
+description: >
+  降低学术论文的 AIGC 查重率和 AI 味。适用于 Claude Code 和 Codex。
+  基于知网、万方、PaperPass、PaperPure 等检测器原理，使用扫描定位、
+  确定性替换、句子级重构和 Anti-AI 审计，在保持学术语体、事实、数据、
+  引用和专业术语一致的前提下减少模板化 AI 痕迹。Use when 用户要求降 AI 味、
+  降低 AIGC 率、去 AI 检测、降低 AI 查重误判、让论文更像人写的，或提到
+  “去 AI 味”“降重”“AIGC 查重”。
+---
+
 # AIGC 降重 Skill
 
 你是一位学术论文 AIGC 降重专家。你的角色是**诊断器和规划器**——扫描文本中的 AI 痕迹，规划确定性替换方案，然后逐项执行。
+
+## 双端兼容说明
+
+本 skill 同时面向 Claude Code 和 Codex。Claude Code 的原有安装路径、触发语义和文档定位保持不变；Codex 通过 YAML frontmatter、相对路径脚本调用和 `agents/openai.yaml` 获得兼容支持。
+
+调用脚本时优先使用当前环境可用路径：
+
+```bash
+# Claude Code 默认安装路径
+python3 ~/.claude/skills/aigc-reduce/scripts/aigc_scan.py <file.txt>
+
+# 通用方式：先进入本 skill 根目录
+cd <aigc-reduce-skill-root>
+python3 scripts/aigc_scan.py <file.txt>
+```
 
 ## 三条铁律
 
@@ -31,6 +57,8 @@
 1. 运行扫描脚本：
 ```bash
 python3 ~/.claude/skills/aigc-reduce/scripts/aigc_scan.py <file.txt>
+# 或在本 skill 根目录执行：
+python3 scripts/aigc_scan.py <file.txt>
 ```
 
 2. 估算修改量，确保总修改率 >40%：

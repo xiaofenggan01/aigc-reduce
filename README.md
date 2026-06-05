@@ -1,16 +1,36 @@
 # AIGC Reduce
 
-降低学术论文 AIGC 查重率的 Claude Code Skill。
+降低学术论文 AIGC 查重率的 Claude Code Skill，同时增量兼容 Codex。
 
 基于知网 3.0、万方、PaperPass、PaperPure 等主流检测器的技术原理，结合 [humanizer skill](https://github.com/blader/humanizer)（源自 Wikipedia "Signs of AI writing"）的 AI 痕迹识别方法论，通过**三轮降重协议**（去除痕迹 → 注入人类特征 → 自检审计）让文本呈现「人类写作」的统计特征。
 
 ## 安装
+
+### Claude Code
+
+Claude Code 是本 skill 的原始目标环境，推荐安装到：
 
 ```bash
 git clone https://github.com/xiaofenggan01/aigc-reduce.git ~/.claude/skills/aigc-reduce
 ```
 
 安装后，当你在 Claude Code 中提到「降 AI 味」「降 AIGC 率」「去 AI 检测」等关键词时，该 skill 会自动触发。
+
+### Codex
+
+Codex 可安装到 Codex 可发现的 skills 目录：
+
+```bash
+git clone https://github.com/xiaofenggan01/aigc-reduce.git ~/.agents/skills/aigc-reduce
+```
+
+如果你的环境使用 `$CODEX_HOME/skills`：
+
+```bash
+git clone https://github.com/xiaofenggan01/aigc-reduce.git "$CODEX_HOME/skills/aigc-reduce"
+```
+
+Codex 通过 `SKILL.md` frontmatter 识别触发条件，通过 `agents/openai.yaml` 读取 UI 元数据。Claude Code 可以忽略 `agents/openai.yaml`。
 
 ## 为什么需要这个工具？
 
@@ -88,6 +108,8 @@ python3 scripts/aigc_scan.py your_paper.txt
 aigc-reduce/
 ├── SKILL.md                            # Skill 核心（120行，渐进式披露 Level 2）
 ├── README.md                           # 本文件
+├── agents/
+│   └── openai.yaml                     # Codex UI 元数据，Claude Code 可忽略
 ├── references/
 │   ├── replacement-tables.md           # 替换表 + 72 词中文 AI 高频词清单
 │   ├── ai-patterns.md                  # 10 种深度 AI 痕迹识别模式
