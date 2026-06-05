@@ -1,0 +1,7 @@
+interface:
+  display_name: "AIGC Reduce"
+  short_description: "Scan and reduce academic AI-writing traces"
+  default_prompt: "Use $aigc-reduce to scan this academic text for AI-writing traces and propose deterministic edits."
+
+policy:
+  allow_implicit_invocation: true
