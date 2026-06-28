@@ -51,6 +51,13 @@ TEMPLATE_PATTERNS = [
     r'(具有重要的.{2,10}(意义|价值|作用))',
     r'(具有广阔的应用前景)',
     r'(为.{2,20}(提供了|奠定了).{2,10}(基础|依据|参考))',
+    # 成对转折或否定收束
+    r'(不是[^\n。！？!?.]{1,40}而是)',
+    r'(但至少)',
+    r'(不代表)',
+    r'(不等于)',
+    r'(不一定[^\n。！？!?.]{1,40}(?:但是|但|却))',
+    r'(即使[^\n。！？!?.]{1,40}也)',
 ]
 
 # 被动语态标记
@@ -94,7 +101,7 @@ def split_paragraphs(text: str) -> list[str]:
 
 def split_sentences(text: str) -> list[str]:
     """按句子拆分"""
-    sentences = re.split(r'[。！？!?\n]', text)
+    sentences = re.split(r'[。！？!?\n]|(?<!\d)\.|\.(?!\d)', text)
     return [s.strip() for s in sentences if s.strip() and len(s.strip()) > 5]
 
 
