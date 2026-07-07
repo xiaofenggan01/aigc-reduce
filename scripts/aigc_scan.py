@@ -4,13 +4,17 @@ AIGC 特征扫描器 — 检测学术论文中的 AI 生成痕迹
 
 基于知网 3.0 / 万方 / PaperPass 的检测原理，扫描以下维度：
   1. 模板句式密度
-  2. 句子长度均匀度（突发性）
-  3. 嵌套编号模式
-  4. 冒号并列结构
-  5. 被动语态比例
-  6. 段落长度对称性
-  7. 模糊表述密度
-  8. 标点符号规律性
+  2. 被动语态比例
+  3. 句子长度均匀度（突发性）
+  4. 段落长度对称性
+  5. 嵌套编号模式
+  6. 冒号并列结构
+  7. 标点符号规律性
+  8. 口语化/网络用语密度（降重过度预警）
+  9. 破折号密度（每段 ≤1 个）
+
+维度 8、9 不是 AI 痕迹，而是"降重过度"预警：降重时若把学术语体改成口语、
+堆砌破折号，能骗过机审但过不了人审。命中即提示改回书面学术表达。
 
 用法: python aigc_scan.py <file.txt> [--json] [--threshold 0.5]
 """
@@ -77,6 +81,26 @@ COLON_LIST_PATTERN = re.compile(r'[：:]\s*.+?[；;]\s*.+?[；;]')
 
 # 全角标点
 FULLWIDTH_PUNCT = set('，。！？；：、""''（）【】《》')
+
+# ─── 口语化 / 网络用语词库（降重过度预警） ───
+# 与 references/replacement-tables.md 的负面清单保持一致。
+# 命中即说明降重时把学术语体改成了口语，过不了人审。
+COLLOQUIAL_TERMS = [
+    # 网络用语
+    'yyds', '绝绝子', '破防', 'emo', '拿捏', '整活', '有梗', '无语',
+    '离谱', '逆天', '炸裂', '社死', '摆烂', '搞定', '踩坑', '翻车',
+    '封神', '硬核', '谁懂啊', '手感',
+    # 情绪词
+    '气死', '乐死', '笑死', '烦躁', '郁闷',
+    # 口语化固定搭配
+    '说实话', '坦白讲', '老实说', '不瞒你说', '说白了', '讲真', '反正',
+    '大概齐', '差不多就是', '这事的难度', '这事儿', '不得不考虑的一环',
+    '一点一点磨出来', '撑起来', '比表面看起来大得多', '说到底', '归根结底就是',
+    '真的强', '真的行', '拉满', '没跑偏',
+]
+
+# 破折号（中文全角 em dash）
+EM_DASH = '——'
 
 
 def load_text(filepath: str) -> str:
@@ -170,7 +194,12 @@ def analyze_para_symmetry(paragraphs: list[str]) -> dict:
     """分析段落长度对称性"""
     para_lens = [len(p) for p in paragraphs]
     if len(para_lens) < 3:
-        return {'risk': '段落数不足', 'symmetrical_count': 0}
+        return {
+            'para_count': len(para_lens),
+            'avg_para_len': round(sum(para_lens) / len(para_lens), 1) if para_lens else 0,
+            'symmetrical_runs': [],
+            'risk': '段落数不足',
+        }
 
     # 检测连续 3 段以上长度相近（偏差 < 20%）
     symmetrical_runs = []
@@ -230,6 +259,44 @@ def analyze_punctuation(text: str) -> dict:
     }
 
 
+def count_colloquial_terms(text: str) -> dict:
+    """检测口语化/网络用语（降重过度预警）
+
+    这不是 AI 痕迹，而是降重时把学术语体改成口语的信号。
+    命中任意一个即高风险：论文里不该出现这些词。
+    """
+    hits = []
+    for term in COLLOQUIAL_TERMS:
+        count = text.count(term)
+        if count:
+            hits.extend([term] * count)
+    return {
+        'count': len(hits),
+        'terms': sorted(set(hits)),
+        'risk': f'⚠️ 检测到 {len(hits)} 处口语化/网络用语，破坏学术语体' if hits else '正常'
+    }
+
+
+def analyze_dash_density(paragraphs: list[str]) -> dict:
+    """检测破折号密度（每段最多 1 个 —— ）
+
+    破折号是 DeepSeek 等模型的强口癖，也是降重时常见的过度用法。
+    任何一段出现 2 个及以上即标记。
+    """
+    over_limit_paras = 0
+    total_dashes = 0
+    for para in paragraphs:
+        n = para.count(EM_DASH)
+        total_dashes += n
+        if n >= 2:
+            over_limit_paras += 1
+    return {
+        'total_dashes': total_dashes,
+        'over_limit_paras': over_limit_paras,
+        'risk': f'⚠️ {over_limit_paras} 段破折号超过 1 个' if over_limit_paras else '正常'
+    }
+
+
 def scan(text: str) -> dict:
     """完整扫描"""
     paragraphs = split_paragraphs(text)
@@ -248,6 +315,8 @@ def scan(text: str) -> dict:
         'nested_numbers': count_nested_numbers(text),
         'colon_lists': count_colon_lists(text),
         'punctuation': analyze_punctuation(text),
+        'colloquial': count_colloquial_terms(text),
+        'dash_density': analyze_dash_density(paragraphs),
     }
 
 
@@ -261,6 +330,8 @@ def print_report(result: dict):
     nn = result['nested_numbers']
     cl = result['colon_lists']
     pu = result['punctuation']
+    co = result['colloquial']
+    dd = result['dash_density']
 
     print("=" * 60)
     print("  AIGC 特征扫描报告")
@@ -305,6 +376,18 @@ def print_report(result: dict):
     print(f"      每句逗号数: {pu['commas_per_sentence']}")
     print(f"      风险: {pu['risk']}")
 
+    print(f"\n{'─' * 40}")
+    print("  [8] 口语化/网络用语（降重过度预警）")
+    print(f"      命中: {co['count']} 处")
+    if co['terms']:
+        print(f"      词汇: {co['terms']}")
+    print(f"      风险: {co['risk']}")
+
+    print(f"\n{'─' * 40}")
+    print("  [9] 破折号密度（每段 ≤1 个）")
+    print(f"      破折号总数: {dd['total_dashes']}, 超标段落: {dd['over_limit_paras']}")
+    print(f"      风险: {dd['risk']}")
+
     # 综合评分
     risk_count = 0
     if tp['count'] > 3: risk_count += 1
@@ -313,10 +396,15 @@ def print_report(result: dict):
     if ps.get('symmetrical_runs', []): risk_count += 1
     if nn['count'] > 3: risk_count += 1
     if pu['commas_per_sentence'] > 2.5: risk_count += 1
+    if co['count'] > 0: risk_count += 1
+    if dd['over_limit_paras'] > 0: risk_count += 1
 
     print(f"\n{'=' * 60}")
     print(f"  综合风险: {'🔴 高' if risk_count >= 4 else '🟡 中' if risk_count >= 2 else '🟢 低'}")
-    print(f"  触发维度: {risk_count}/7")
+    print(f"  触发维度: {risk_count}/8")
+    if co['count'] > 0 or dd['over_limit_paras'] > 0:
+        print("  ⚠️ 语体预警: 检测到口语化或破折号过密，属'降重过度'，")
+        print("     请对照 references/positive-style-academic.md 改回书面学术表达。")
     print(f"  建议: {'需要多轮深度改写' if risk_count >= 4 else '局部调整即可' if risk_count >= 2 else '风险较低，微调即可'}")
     print("=" * 60)
 
